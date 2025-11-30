@@ -1,0 +1,15 @@
+torch
+transformers
+sentence-transformers
+chromadb
+fastapi
+uvicorn
+streamlit
+pydantic
+python-dotenv
+
+
+pypdf
+langchain
+pytest
+boto3
