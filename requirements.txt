@@ -1,15 +1,17 @@
-torch
-transformers
-sentence-transformers
-chromadb
-fastapi
-uvicorn
-streamlit
-pydantic
-python-dotenv
-
-
-pypdf
+# Core LangChain ecosystem
 langchain
-pytest
-boto3
+langchain-core
+langchain-community
+langchain-openai
+langchain-text-splitters
+langchain-chroma
+langchain-ollama
+
+# Vector store backend
+chromadb
+
+# PDF loading
+pypdf
+
+#UI
+streamilt
