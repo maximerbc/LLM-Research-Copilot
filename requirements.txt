@@ -14,4 +14,7 @@ chromadb
 pypdf
 
 #UI
-streamilt
+streamlit
+
+# Environment variable management
+python-dotenv

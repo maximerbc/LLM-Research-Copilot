@@ -61,12 +61,12 @@ def run_rag(query_text: str):
 
 
 def main():
-    st.set_page_config(page_title="CNN RAG Viewer", layout="wide")
-    st.title("CNN RAG Viewer")
+    st.set_page_config(page_title="LLM Reasearch Rag Viewer", layout="wide")
+    st.title("LLM Research RAG Viewer")
 
-    st.markdown("Ask a question about your CNN documents and see the retrieved chunks + answer.")
+    st.markdown("Ask a question about your LLM architecture documents and see the retrieved chunks + answer.")
 
-    query_text = st.text_area("Question", height=80, placeholder="e.g. What is a convolutional neural network?")
+    query_text = st.text_area("Question", height=80, placeholder="e.g. Why does the Transformer use multi-head attention instead of a single attention mechanism?")
 
     if st.button("Run RAG") and query_text.strip():
         with st.spinner("Retrieving context and generating answer…"):
