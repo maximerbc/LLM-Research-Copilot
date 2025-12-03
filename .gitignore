@@ -208,7 +208,5 @@ __marimo__/
 
 
 # Big Data folders
-data/raw/
-data/processed/
 models/
 chroma/
