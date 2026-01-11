@@ -1,3 +1,5 @@
+import re
+import subprocess
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -34,30 +36,68 @@ def get_db():
 
 
 @st.cache_resource
-def get_llm():
-    """Load the Ollama/Mistral model once and reuse it."""
-    return ChatOllama(model="mistral")
+def get_llm(model_name: str):
+    """Load the Ollama model once and reuse it."""
+    return ChatOllama(model=model_name)
 
 
-def run_rag(query_text: str):
-    db = get_db()
-    llm = get_llm()
+@st.cache_resource
+def get_ollama_models():
+    """Return available Ollama model names; fall back to empty."""
+    try:
+        output = subprocess.check_output(["ollama", "list"], text=True)
+    except Exception:
+        return []
 
-    # 1) Retrieve top-k chunks
-    results = db.similarity_search_with_score(query_text, k=5)
+    models = []
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    for line in lines[1:]:
+        model = line.split()[0]
+        if model:
+            models.append(model)
+    return models
 
-    # 2) Build context and prompt
+
+def build_prompt_and_context(results, query_text: str):
     context_text = "\n\n---\n\n".join([doc.page_content for doc, _ in results])
     prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE).format(
         context=context_text,
         question=query_text,
     )
+    return prompt, context_text
+
+
+def quality_score(answer_text: str, context_text: str) -> float:
+    """Simple grounding score: fraction of answer tokens found in context."""
+    answer_tokens = {
+        t for t in re.findall(r"[A-Za-z0-9]+", answer_text.lower()) if len(t) > 2
+    }
+    context_tokens = {
+        t for t in re.findall(r"[A-Za-z0-9]+", context_text.lower()) if len(t) > 2
+    }
+    if not answer_tokens:
+        return 0.0
+    overlap = answer_tokens.intersection(context_tokens)
+    return len(overlap) / len(answer_tokens)
+
+
+def run_rag(query_text: str, model_name: str, k: int):
+    db = get_db()
+    llm = get_llm(model_name)
+
+    # 1) Retrieve top-k chunks
+    results = db.similarity_search_with_score(query_text, k=k)
+
+    # 2) Build context and prompt
+    prompt, context_text = build_prompt_and_context(results, query_text)
 
     # 3) Ask the LLM
     response = llm.invoke(prompt)
     answer_text = response.content
 
-    return answer_text, results
+    score = quality_score(answer_text, context_text)
+
+    return answer_text, results, score
 
 
 def main():
@@ -66,22 +106,53 @@ def main():
 
     st.markdown("Ask a question about your LLM architecture documents and see the retrieved chunks + answer.")
 
+    available_models = set(get_ollama_models())
+    model_choices = ["mistral:latest", "fine_tuned_model:latest"]
+    models_to_compare = st.sidebar.multiselect(
+        "Models to compare",
+        model_choices,
+        default=model_choices,
+    )
+    for model_name in model_choices:
+        if model_name not in available_models:
+            st.sidebar.warning(f"Model not found in Ollama: {model_name}")
+
+    k = st.sidebar.slider("Retrieved chunks (k)", min_value=2, max_value=6, value=3)
+
     query_text = st.text_area("Question", height=80, placeholder="e.g. Why does the Transformer use multi-head attention instead of a single attention mechanism?")
 
     if st.button("Run RAG") and query_text.strip():
-        with st.spinner("Retrieving context and generating answer…"):
-            answer, results = run_rag(query_text.strip())
+        with st.spinner("Retrieving context and generating answers…"):
+            results = get_db().similarity_search_with_score(query_text.strip(), k=k)
+            prompt, context_text = build_prompt_and_context(results, query_text.strip())
+
+            model_outputs = []
+            for model_name in models_to_compare:
+                llm = get_llm(model_name)
+                response = llm.invoke(prompt)
+                answer_text = response.content
+                score = quality_score(answer_text, context_text)
+                model_outputs.append((model_name, answer_text, score))
 
         # Question
         st.markdown("### Question")
         st.write(query_text.strip())
 
         # Answer
-        st.markdown("### Answer")
-        st.write(answer)
+        st.markdown("### Answers (with quality score)")
+        st.caption("Quality score = fraction of answer tokens found in retrieved context (0 to 1).")
+        if not model_outputs:
+            st.info("Select at least one model to compare.")
+        else:
+            cols = st.columns(len(model_outputs))
+            for col, (model_name, answer_text, score) in zip(cols, model_outputs):
+                with col:
+                    st.markdown(f"**{model_name}**")
+                    st.metric("Quality score", f"{score:.2f}")
+                    st.write(answer_text)
 
         # Retrieved chunks
-        st.markdown("### Retrieved context (5 chunks)")
+        st.markdown(f"### Retrieved context ({k} chunks)")
         if not results:
             st.info("No chunks were retrieved from the vector database.")
         else:

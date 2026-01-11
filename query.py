@@ -22,12 +22,13 @@ def main():
     # Create CLI.
     parser = argparse.ArgumentParser()
     parser.add_argument("query_text", type=str, help="The query text.")
+    parser.add_argument("--model", default="mistral", help="Ollama model name.")
     args = parser.parse_args()
     query_text = args.query_text
-    query_rag(query_text)
+    query_rag(query_text, args.model)
 
 
-def query_rag(query_text: str):
+def query_rag(query_text: str, model_name: str):
     # Prepare the DB.
     embedding_function = get_embedding_function()
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
@@ -40,7 +41,7 @@ def query_rag(query_text: str):
     prompt = prompt_template.format(context=context_text, question=query_text)
     # print(prompt)
 
-    model = Ollama(model="mistral")
+    model = Ollama(model=model_name)
     response_text = model.invoke(prompt)
 
     sources = [doc.metadata.get("id", None) for doc, _score in results]
